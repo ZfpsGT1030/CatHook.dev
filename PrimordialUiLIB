@@ -1,0 +1,855 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local CatHookUI = {}
+CatHookUI.__index = CatHookUI
+CatHookUI.Version = "1.0.0"
+
+local DEFAULT_COLORS = {
+    Window = Color3.fromRGB(18, 18, 19),
+    Header = Color3.fromRGB(22, 22, 23),
+    Panel = Color3.fromRGB(15, 15, 16),
+    Input = Color3.fromRGB(10, 10, 11),
+    Button = Color3.fromRGB(28, 28, 30),
+    NavIdle = Color3.fromRGB(22, 22, 23),
+    NavSelected = Color3.fromRGB(35, 35, 37),
+    Divider = Color3.fromRGB(146, 116, 164),
+    Text = Color3.fromRGB(240, 240, 242),
+    TextDim = Color3.fromRGB(205, 205, 207),
+    TextMuted = Color3.fromRGB(144, 144, 146),
+}
+
+local function create(className, props, parent)
+    local object = Instance.new(className)
+    for key, value in pairs(props or {}) do
+        object[key] = value
+    end
+    object.Parent = parent
+    return object
+end
+
+local function round(object, radius)
+    create("UICorner", {
+        CornerRadius = radius or UDim.new(0, 7),
+    }, object)
+    return object
+end
+
+local function pad(object, props)
+    create("UIPadding", props, object)
+    return object
+end
+
+local function attachCommonMethods(widget, instance)
+    widget.Instance = instance
+
+    function widget:GetInstance()
+        return self.Instance
+    end
+
+    function widget:SetVisible(state)
+        if self.Instance then
+            self.Instance.Visible = state and true or false
+        end
+        return self
+    end
+
+    function widget:Destroy()
+        if self.Instance then
+            self.Instance:Destroy()
+            self.Instance = nil
+        end
+    end
+
+    return widget
+end
+
+local function attachTextMethods(widget, instance)
+    attachCommonMethods(widget, instance)
+
+    function widget:SetText(text)
+        if self.Instance then
+            self.Instance.Text = tostring(text)
+        end
+        return self
+    end
+
+    function widget:GetText()
+        if self.Instance then
+            return self.Instance.Text
+        end
+        return ""
+    end
+
+    function widget:SetTextColor(color)
+        if self.Instance then
+            self.Instance.TextColor3 = color
+        end
+        return self
+    end
+
+    return widget
+end
+
+local function resolveParent(parentOverride)
+    if parentOverride then
+        return parentOverride
+    end
+
+    local ok, exploitUi = pcall(function()
+        if gethui then
+            return gethui()
+        end
+    end)
+
+    if ok and exploitUi then
+        return exploitUi
+    end
+
+    if LocalPlayer then
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
+        if playerGui then
+            return playerGui
+        end
+    end
+
+    return game:GetService("CoreGui")
+end
+
+local function drawLogo(parent)
+    local logoWrap = create("Frame", {
+        Size = UDim2.fromOffset(26, 34),
+        Position = UDim2.fromOffset(14, 10),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, parent)
+
+    local logoShadowLeft = create("Frame", {
+        Size = UDim2.fromOffset(8, 24),
+        Position = UDim2.fromOffset(3, 3),
+        Rotation = -34,
+        BackgroundColor3 = Color3.fromRGB(17, 17, 18),
+        BorderSizePixel = 0,
+    }, logoWrap)
+    round(logoShadowLeft, UDim.new(1, 0))
+
+    local logoShadowRight = create("Frame", {
+        Size = UDim2.fromOffset(8, 24),
+        Position = UDim2.fromOffset(14, 3),
+        Rotation = 34,
+        BackgroundColor3 = Color3.fromRGB(17, 17, 18),
+        BorderSizePixel = 0,
+    }, logoWrap)
+    round(logoShadowRight, UDim.new(1, 0))
+
+    local logoLeft = create("Frame", {
+        Size = UDim2.fromOffset(7, 24),
+        Position = UDim2.fromOffset(2, 2),
+        Rotation = -34,
+        BackgroundColor3 = Color3.fromRGB(242, 238, 241),
+        BorderSizePixel = 0,
+    }, logoWrap)
+    round(logoLeft, UDim.new(1, 0))
+
+    local logoRight = create("Frame", {
+        Size = UDim2.fromOffset(7, 24),
+        Position = UDim2.fromOffset(15, 2),
+        Rotation = 34,
+        BackgroundColor3 = Color3.fromRGB(242, 238, 241),
+        BorderSizePixel = 0,
+    }, logoWrap)
+    round(logoRight, UDim.new(1, 0))
+
+    local logoCenter = create("Frame", {
+        Size = UDim2.fromOffset(12, 15),
+        Position = UDim2.fromOffset(7, 5),
+        Rotation = 10,
+        BackgroundColor3 = Color3.fromRGB(201, 170, 184),
+        BorderSizePixel = 0,
+    }, logoWrap)
+    round(logoCenter, UDim.new(1, 0))
+
+    create("UIStroke", {
+        Color = Color3.fromRGB(20, 20, 22),
+        Thickness = 1.5,
+        Transparency = 0.2,
+    }, logoCenter)
+end
+
+local PanelMethods = {}
+PanelMethods.__index = PanelMethods
+
+function PanelMethods:CreateSectionTitle(options)
+    local opts = type(options) == "table" and options or { Text = tostring(options) }
+    local label = create("TextLabel", {
+        Size = opts.Size or UDim2.new(1, 0, 0, 24),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(opts.Text or "section"),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 16,
+        Font = opts.Font or Enum.Font.GothamBold,
+        TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left,
+        TextYAlignment = opts.TextYAlignment or Enum.TextYAlignment.Center,
+    }, self.Instance)
+
+    return attachTextMethods({}, label)
+end
+
+function PanelMethods:CreateFieldLabel(options)
+    local opts = type(options) == "table" and options or { Text = tostring(options) }
+    local label = create("TextLabel", {
+        Size = opts.Size or UDim2.fromOffset(170, 18),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(opts.Text or "label"),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.TextDim,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.GothamMedium,
+        TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left,
+        TextYAlignment = opts.TextYAlignment or Enum.TextYAlignment.Center,
+        TextWrapped = opts.TextWrapped == true,
+    }, self.Instance)
+
+    return attachTextMethods({}, label)
+end
+
+function PanelMethods:CreateDivider(options)
+    local opts = type(options) == "table" and options or {}
+    local divider = create("Frame", {
+        Size = opts.Size or UDim2.new(1, 0, 0, 1),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.Color or DEFAULT_COLORS.Divider,
+        BorderSizePixel = 0,
+        BackgroundTransparency = opts.Transparency or 0,
+    }, self.Instance)
+
+    return attachCommonMethods({}, divider)
+end
+
+function PanelMethods:CreateTextInput(options)
+    local opts = type(options) == "table" and options or {}
+    local box = create("TextBox", {
+        Size = opts.Size or UDim2.fromOffset(170, 34),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Input,
+        BorderSizePixel = 0,
+        ClearTextOnFocus = opts.ClearTextOnFocus == true,
+        Text = tostring(opts.Text or ""),
+        PlaceholderText = tostring(opts.PlaceholderText or ""),
+        PlaceholderColor3 = opts.PlaceholderColor3 or Color3.fromRGB(105, 105, 108),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.Gotham,
+        TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left,
+    }, self.Instance)
+    round(box, opts.CornerRadius or UDim.new(0, 7))
+    pad(box, {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+    })
+
+    local widget = attachTextMethods({}, box)
+
+    function widget:SetPlaceholder(text)
+        if self.Instance then
+            self.Instance.PlaceholderText = tostring(text)
+        end
+        return self
+    end
+
+    function widget:OnFocusLost(callback)
+        return self.Instance.FocusLost:Connect(function(enterPressed)
+            callback(self.Instance.Text, enterPressed, self)
+        end)
+    end
+
+    if opts.Callback then
+        widget:OnFocusLost(opts.Callback)
+    end
+
+    return widget
+end
+
+function PanelMethods:CreateValueBox(options)
+    local opts = type(options) == "table" and options or {}
+    local label = create("TextLabel", {
+        Size = opts.Size or UDim2.fromOffset(170, 34),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Input,
+        BorderSizePixel = 0,
+        Text = tostring(opts.Text or ""),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.Gotham,
+        TextWrapped = opts.TextWrapped == true,
+        TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left,
+        TextYAlignment = opts.TextYAlignment or Enum.TextYAlignment.Center,
+    }, self.Instance)
+    round(label, opts.CornerRadius or UDim.new(0, 7))
+    pad(label, {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+    })
+
+    return attachTextMethods({}, label)
+end
+
+function PanelMethods:CreateParagraph(options)
+    local opts = type(options) == "table" and options or {}
+    local label = create("TextLabel", {
+        Size = opts.Size or UDim2.fromOffset(275, 74),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Input,
+        BorderSizePixel = 0,
+        Text = tostring(opts.Text or ""),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.Gotham,
+        TextWrapped = opts.TextWrapped ~= false,
+        TextYAlignment = opts.TextYAlignment or Enum.TextYAlignment.Top,
+        TextXAlignment = opts.TextXAlignment or Enum.TextXAlignment.Left,
+    }, self.Instance)
+    round(label, opts.CornerRadius or UDim.new(0, 7))
+    pad(label, {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+    })
+
+    return attachTextMethods({}, label)
+end
+
+function PanelMethods:CreateButton(options)
+    local opts = type(options) == "table" and options or { Text = tostring(options) }
+    local button = create("TextButton", {
+        Size = opts.Size or UDim2.fromOffset(110, 34),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Button,
+        BorderSizePixel = 0,
+        AutoButtonColor = opts.AutoButtonColor == true,
+        Text = tostring(opts.Text or "button"),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.GothamMedium,
+    }, self.Instance)
+    round(button, opts.CornerRadius or UDim.new(0, 7))
+
+    local widget = attachTextMethods({}, button)
+
+    function widget:OnClick(callback)
+        return self.Instance.MouseButton1Click:Connect(function()
+            callback(self)
+        end)
+    end
+
+    if opts.Callback then
+        widget:OnClick(opts.Callback)
+    end
+
+    return widget
+end
+
+function PanelMethods:CreateToggle(options)
+    local opts = type(options) == "table" and options or {}
+
+    local holder = create("Frame", {
+        Size = opts.Size or UDim2.fromOffset(170, 34),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Input,
+        BorderSizePixel = 0,
+    }, self.Instance)
+    round(holder, opts.CornerRadius or UDim.new(0, 7))
+
+    local button = create("TextButton", {
+        Size = UDim2.fromOffset(18, 18),
+        Position = UDim2.fromOffset(9, 8),
+        BackgroundColor3 = Color3.fromRGB(22, 22, 23),
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "",
+    }, holder)
+    round(button, UDim.new(0, 5))
+
+    local fill = create("Frame", {
+        Size = UDim2.fromOffset(10, 10),
+        Position = UDim2.fromOffset(4, 4),
+        BackgroundColor3 = opts.FillColor or DEFAULT_COLORS.Text,
+        BorderSizePixel = 0,
+        Visible = opts.Default == true,
+    }, button)
+    round(fill, UDim.new(0, 3))
+
+    local label = create("TextLabel", {
+        Size = UDim2.new(1, -44, 0, 18),
+        Position = UDim2.fromOffset(36, 8),
+        BackgroundTransparency = 1,
+        Text = tostring(opts.Text or "toggle"),
+        TextColor3 = opts.TextColor3 or DEFAULT_COLORS.Text,
+        TextSize = opts.TextSize or 14,
+        Font = opts.Font or Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, holder)
+
+    local widget = attachCommonMethods({}, holder)
+    widget.Button = button
+    widget.Fill = fill
+    widget.Label = label
+    widget.Value = opts.Default == true
+    widget.ChangedCallbacks = {}
+
+    function widget:SetText(text)
+        self.Label.Text = tostring(text)
+        return self
+    end
+
+    function widget:GetText()
+        return self.Label.Text
+    end
+
+    function widget:GetValue()
+        return self.Value
+    end
+
+    function widget:SetValue(state, silent)
+        self.Value = state and true or false
+        self.Fill.Visible = self.Value
+
+        if not silent then
+            for _, callback in ipairs(self.ChangedCallbacks) do
+                callback(self.Value, self)
+            end
+        end
+
+        return self
+    end
+
+    function widget:OnChanged(callback)
+        table.insert(self.ChangedCallbacks, callback)
+        return callback
+    end
+
+    local function toggle()
+        widget:SetValue(not widget.Value)
+    end
+
+    button.MouseButton1Click:Connect(toggle)
+    holder.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            toggle()
+        end
+    end)
+
+    if opts.Callback then
+        widget:OnChanged(opts.Callback)
+    end
+
+    return widget
+end
+
+function PanelMethods:CreateList(options)
+    local opts = type(options) == "table" and options or {}
+    local frame = create("ScrollingFrame", {
+        Size = opts.Size or UDim2.fromOffset(280, 200),
+        Position = opts.Position or UDim2.fromOffset(0, 0),
+        BackgroundColor3 = opts.BackgroundColor3 or DEFAULT_COLORS.Input,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = opts.ScrollBarThickness or 3,
+        ScrollBarImageColor3 = opts.ScrollBarImageColor3 or Color3.fromRGB(72, 72, 74),
+    }, self.Instance)
+    round(frame, opts.CornerRadius or UDim.new(0, 7))
+    pad(frame, {
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+    })
+
+    local layout = create("UIListLayout", {
+        Padding = UDim.new(0, opts.ItemPadding or 6),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, frame)
+
+    local widget = attachCommonMethods({}, frame)
+    widget.Items = {}
+    widget.Layout = layout
+
+    function widget:AddItem(itemOptions)
+        local itemOpts = type(itemOptions) == "table" and itemOptions or { Text = tostring(itemOptions) }
+        local clickable = itemOpts.Clickable == true or itemOpts.Callback ~= nil
+        local className = clickable and "TextButton" or "TextLabel"
+
+        local item = create(className, {
+            Size = itemOpts.Size or UDim2.new(1, -4, 0, itemOpts.Height or 34),
+            BackgroundColor3 = itemOpts.BackgroundColor3 or Color3.fromRGB(22, 22, 23),
+            BorderSizePixel = 0,
+            AutoButtonColor = false,
+            Text = tostring(itemOpts.Text or "item"),
+            TextColor3 = itemOpts.TextColor3 or Color3.fromRGB(210, 210, 212),
+            TextSize = itemOpts.TextSize or 14,
+            Font = itemOpts.Font or Enum.Font.Gotham,
+            TextXAlignment = itemOpts.TextXAlignment or Enum.TextXAlignment.Left,
+        }, frame)
+        round(item, itemOpts.CornerRadius or UDim.new(0, 7))
+        pad(item, {
+            PaddingLeft = UDim.new(0, 10),
+            PaddingRight = UDim.new(0, 10),
+        })
+
+        local itemWidget = attachTextMethods({}, item)
+        itemWidget.Clickable = clickable
+
+        function itemWidget:SetSelected(state)
+            if self.Instance then
+                self.Instance.BackgroundColor3 = state and DEFAULT_COLORS.NavSelected or Color3.fromRGB(22, 22, 23)
+            end
+            return self
+        end
+
+        function itemWidget:OnClick(callback)
+            if self.Instance and self.Instance:IsA("TextButton") then
+                return self.Instance.MouseButton1Click:Connect(function()
+                    callback(self)
+                end)
+            end
+        end
+
+        if itemOpts.Callback and item:IsA("TextButton") then
+            item.MouseButton1Click:Connect(function()
+                itemOpts.Callback(itemWidget)
+            end)
+        end
+
+        table.insert(widget.Items, itemWidget)
+        return itemWidget
+    end
+
+    function widget:Clear()
+        for _, item in ipairs(self.Items) do
+            item:Destroy()
+        end
+        table.clear(self.Items)
+        return self
+    end
+
+    function widget:SetItems(items)
+        self:Clear()
+        for _, item in ipairs(items or {}) do
+            self:AddItem(item)
+        end
+        return self
+    end
+
+    function widget:GetItems()
+        return self.Items
+    end
+
+    return widget
+end
+
+function CatHookUI:CreateWindow(options)
+    local opts = options or {}
+    local parent = resolveParent(opts.Parent)
+    local name = tostring(opts.Name or "CatHookUI")
+
+    if opts.ReplaceExisting ~= false then
+        local oldGui = parent:FindFirstChild(name)
+        if oldGui then
+            oldGui:Destroy()
+        end
+    end
+
+    local screenGui = create("ScreenGui", {
+        Name = name,
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Global,
+    }, parent)
+
+    local main = create("Frame", {
+        Size = opts.Size or UDim2.fromOffset(860, 560),
+        Position = opts.Position or UDim2.new(0.5, -430, 0.5, -280),
+        BackgroundColor3 = DEFAULT_COLORS.Window,
+        BorderSizePixel = 0,
+        Visible = opts.Visible ~= false,
+    }, screenGui)
+    round(main, UDim.new(0, 16))
+
+    local header = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 54),
+        BackgroundColor3 = DEFAULT_COLORS.Header,
+        BorderSizePixel = 0,
+    }, main)
+    round(header, UDim.new(0, 16))
+
+    create("Frame", {
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 1, -1),
+        BackgroundColor3 = DEFAULT_COLORS.Divider,
+        BorderSizePixel = 0,
+    }, header)
+
+    drawLogo(header)
+
+    local titleLabel = create("TextLabel", {
+        Size = UDim2.fromOffset(260, 24),
+        Position = UDim2.fromOffset(40, 14),
+        BackgroundTransparency = 1,
+        Text = tostring(opts.Title or "CatHook.dev"),
+        TextColor3 = Color3.fromRGB(225, 225, 227),
+        TextSize = 25,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, header)
+
+    local contentArea = create("Frame", {
+        Size = UDim2.new(1, -36, 1, -138),
+        Position = UDim2.fromOffset(18, 72),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, main)
+
+    local bottomBar = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 68),
+        Position = UDim2.new(0, 0, 1, -68),
+        BackgroundColor3 = DEFAULT_COLORS.Header,
+        BorderSizePixel = 0,
+    }, main)
+    round(bottomBar, UDim.new(0, 16))
+
+    create("Frame", {
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = DEFAULT_COLORS.Divider,
+        BorderSizePixel = 0,
+    }, bottomBar)
+
+    local navHolder = create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.new(0, 0, 0, 40),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    }, bottomBar)
+
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, navHolder)
+
+    local window = setmetatable({}, CatHookUI)
+    window.ScreenGui = screenGui
+    window.Instance = main
+    window.Main = main
+    window.Header = header
+    window.TitleLabel = titleLabel
+    window.ContentArea = contentArea
+    window.BottomBar = bottomBar
+    window.NavHolder = navHolder
+    window.ToggleKey = opts.ToggleKey or Enum.KeyCode.Insert
+    window.Tabs = {}
+    window.TabsByName = {}
+    window.SelectedTab = nil
+    window.Connections = {}
+    window.Dragging = false
+    window.DragStart = nil
+    window.StartPos = nil
+
+    local function setNavSelected(button, selected)
+        button.BackgroundColor3 = selected and DEFAULT_COLORS.NavSelected or DEFAULT_COLORS.NavIdle
+        button.TextColor3 = selected and Color3.fromRGB(244, 244, 246) or DEFAULT_COLORS.TextMuted
+    end
+
+    function window:GetInstance()
+        return self.Main
+    end
+
+    function window:SetTitle(text)
+        self.TitleLabel.Text = tostring(text)
+        return self
+    end
+
+    function window:SetVisible(state)
+        self.Main.Visible = state and true or false
+        return self
+    end
+
+    function window:IsVisible()
+        return self.Main.Visible
+    end
+
+    function window:Toggle()
+        self.Main.Visible = not self.Main.Visible
+        return self.Main.Visible
+    end
+
+    function window:SetToggleKey(keyCode)
+        self.ToggleKey = keyCode
+        return self
+    end
+
+    function window:SelectTab(tabOrName)
+        local tab = tabOrName
+        if type(tabOrName) == "string" then
+            tab = self.TabsByName[tabOrName]
+        end
+
+        if not tab then
+            return nil
+        end
+
+        for _, entry in ipairs(self.Tabs) do
+            entry.Page.Visible = entry == tab
+            setNavSelected(entry.NavButton, entry == tab)
+        end
+
+        self.SelectedTab = tab
+        return tab
+    end
+
+    function window:Destroy()
+        for _, connection in ipairs(self.Connections) do
+            pcall(function()
+                connection:Disconnect()
+            end)
+        end
+        self.Connections = {}
+        if self.ScreenGui then
+            self.ScreenGui:Destroy()
+            self.ScreenGui = nil
+        end
+    end
+
+    function window:CreateTab(tabName, tabOptions)
+        local optionsForTab = tabOptions or {}
+        local tab = {}
+        tab.Name = tostring(tabName or ("tab" .. tostring(#self.Tabs + 1)))
+        tab.Window = self
+
+        tab.Page = create("Frame", {
+            Name = tab.Name .. "Page",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Visible = false,
+        }, self.ContentArea)
+
+        tab.NavButton = create("TextButton", {
+            Size = optionsForTab.NavSize or UDim2.fromOffset(optionsForTab.Width or 96, 40),
+            BackgroundColor3 = DEFAULT_COLORS.NavIdle,
+            BorderSizePixel = 0,
+            AutoButtonColor = false,
+            Text = tab.Name,
+            TextColor3 = DEFAULT_COLORS.TextMuted,
+            TextSize = optionsForTab.TextSize or 13,
+            Font = optionsForTab.Font or Enum.Font.GothamMedium,
+            LayoutOrder = #self.Tabs + 1,
+        }, self.NavHolder)
+        round(tab.NavButton, UDim.new(0, 8))
+
+        function tab:GetInstance()
+            return self.Page
+        end
+
+        function tab:SetName(newName)
+            local oldName = self.Name
+            self.Name = tostring(newName)
+            self.Page.Name = self.Name .. "Page"
+            self.NavButton.Text = self.Name
+            self.Window.TabsByName[oldName] = nil
+            self.Window.TabsByName[self.Name] = self
+            return self
+        end
+
+        function tab:Show()
+            self.Window:SelectTab(self)
+            return self
+        end
+
+        function tab:CreatePanel(panelOptions)
+            local optsForPanel = panelOptions or {}
+            local panel = create("Frame", {
+                Size = optsForPanel.Size or UDim2.fromOffset(300, 300),
+                Position = optsForPanel.Position or UDim2.fromOffset(0, 0),
+                BackgroundColor3 = optsForPanel.BackgroundColor3 or DEFAULT_COLORS.Panel,
+                BorderSizePixel = 0,
+            }, self.Page)
+            round(panel, optsForPanel.CornerRadius or UDim.new(0, 10))
+
+            local panelObject = setmetatable({
+                Instance = panel,
+                Tab = self,
+            }, PanelMethods)
+
+            return panelObject
+        end
+
+        table.insert(self.Tabs, tab)
+        self.TabsByName[tab.Name] = tab
+
+        table.insert(self.Connections, tab.NavButton.MouseButton1Click:Connect(function()
+            self:SelectTab(tab)
+        end))
+
+        if #self.Tabs == 1 or optionsForTab.Selected then
+            self:SelectTab(tab)
+        end
+
+        return tab
+    end
+
+    table.insert(window.Connections, header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            window.Dragging = true
+            window.DragStart = input.Position
+            window.StartPos = main.Position
+        end
+    end))
+
+    table.insert(window.Connections, header.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            window.Dragging = false
+        end
+    end))
+
+    table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
+        if window.Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - window.DragStart
+            main.Position = UDim2.new(
+                window.StartPos.X.Scale,
+                window.StartPos.X.Offset + delta.X,
+                window.StartPos.Y.Scale,
+                window.StartPos.Y.Offset + delta.Y
+            )
+        end
+    end))
+
+    table.insert(window.Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then
+            return
+        end
+
+        if input.KeyCode == window.ToggleKey then
+            window:Toggle()
+        end
+    end))
+
+    return window
+end
+
+if getgenv then
+    getgenv().CatHookUI = CatHookUI
+end
+
+if shared then
+    shared.CatHookUI = CatHookUI
+end
+
+return CatHookUI
